@@ -1,0 +1,63 @@
+<Lems>
+   <ComponentType name="refractiaf">          
+      <Parameter name="threshold" dimension="voltage" />          
+      <Parameter name="refractoryPeriod" dimension="time" />          
+      <Parameter name="capacitance" dimension="capacitance" />          
+      <Parameter name="vleak" dimension="voltage" />          
+      <Parameter name="gleak" dimension="conductance" />          
+      <Parameter name="current" dimension="current" />          
+      <Parameter name="vreset" dimension="voltage" />          
+      <Parameter name="deltaV" dimension="voltage" />          
+      <Parameter name="v0" dimension="voltage" />          
+      <EventPort name="out" direction="out" />          
+      <EventPort name="in" direction="in" />          
+      <Exposure name="v" dimension="voltage" />          
+      <Dynamics>              
+         <StateVariable name="v" exposure="v" dimension="voltage" />                 
+         <StateVariable name="tin" dimension="time" />              
+         <OnStart>                  
+            <StateAssignment variable="v" value="v0" />              
+         </OnStart>              
+         <Regime name="refr">                  
+            <OnEntry>                      
+               <StateAssignment variable="tin" value="t" />                      
+               <StateAssignment variable="v" value="vreset" />                  
+            </OnEntry>                  
+            <OnCondition test="t .gt. tin + refractoryPeriod">                      
+               <Transition regime="int" />                  
+            </OnCondition>              
+         </Regime>              
+         <Regime name="int" initial="true">                  
+            <TimeDerivative variable="v" value="(current + gleak * (vleak - v)) / capacitance" />                  
+            <OnCondition test="v .gt. threshold">                      
+               <EventOut port="out" />                      
+               <Transition regime="refr" />                  
+            </OnCondition>              
+         </Regime>          
+      </Dynamics>      
+   </ComponentType>
+   <refractiaf threshold="-40mV" refractoryPeriod="5ms" capacitance="1nF" vleak="-80mV" gleak="100pS" vreset="-70mV" v0="-70mV" deltaV="10mV" />
+</Lems>
+
+
+<!-- from brian2 import *
+
+n = 1000
+duration = 1*second
+tau = 10*ms
+eqs = '''
+dv/dt = (v0 - v) / tau : volt (unless refractory)
+v0 : volt
+'''
+group = NeuronGroup(n, eqs, threshold='v > -40*mV', reset='v = -70*mV',
+                    refractory=5*ms)
+group.v = 0*mV
+group.v0 = '20*mV * i / (n-1)'
+
+monitor = SpikeMonitor(group)
+
+run(duration)
+plot(group.v0/mV, monitor.count / duration)
+xlabel('v0 (mV)')
+ylabel('Firing rate (sp/s)')
+show() -->
