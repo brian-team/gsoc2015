@@ -1,44 +1,79 @@
 import lems.api as lems
+from lems.model.component import *
+from brian2 import *
 
-fn = 'iaf.xml'
 m = lems.Model()
-m.import_from_file(fn)
+m.add_include_directory('/home/snigdha/neuroml_dev/NeuroML2/NeuroML2CoreTypes')
 
-str_list = []
-str_list.append("from brian2 import *\n")
+def getComponents(Model):
+	return Model.components
 
-for i in range(len(m.components[m.components.keys()[0]].parameters.keys())):
-	str_list.append(m.components[m.components.keys()[0]].parameters.keys()[i] + "=" + m.components[m.components.keys()[0]].parameters.values()[i] + "\n")
+def getParameters(Component):
+	return Component.parameters
 
-for i in m.component_types:
-	if i.dynamics.time_derivatives:
-		for j in i.dynamics.time_derivatives:
-			str_list.append("eqs = ''' ")
-			str_list.append("d" + j.variable + "/dt = " + j.value)
-			str_list.append(" ''' ")
-	for j in i.dynamics.regimes:
-		if j.time_derivatives:
-			for k in j.time_derivatives:
-				str_list.append("eqs = ''' ")
-				str_list.append("d" + k.variable + "/dt = " + k.value)
-				str_list.append(" ''' ")
+def getDynamics(ComponentType):
+	return ComponentType.dynamics
 
-str_list.append("group = Neurongroup(1, eqs")
+def getExposures(ComponentType):
+	return ComponentType.exposures
 
-for i in m.component_types:
-	if i.dynamics.event_handlers:
-		for j in i.dynamics.event_handlers:
-			if type(j) is lems.OnCondition:
-				print j.test
-	if i.dynamics.regimes:
-		for j in i.dynamics.regimes:
-			if j.event_handlers:
-				for k in j.event_handlers:
-					if type(k) is lems.OnCondition:
-						if k.test.startswith("v .gt"):
-							str_list.append(", threshold='v >")
+def getChildren(ComponentType):
+	return ComponentType.children
 
-with open('output.py', 'w') as out_file:
-	out_file.write(''.join(str_list))
+def getTimederivatives(Dynamics):
+	return Dynamics.time_derivatives
+
+def getRegimes(Dynamics):
+	return Dynamics.regimes
+
+def getStatevariables(Dynamics):
+	return Dynamics.state_variables
+
+def getDerivedvaribales(Dynamics):
+	return Dynamics.derived_variables
+
+def getEventhandlers(Dynamics):
+	return Dynamics.event_handlers
+
+def tobrian(filepath):
+	s = ""
+	m.import_from_file(filepath)
+	comp = getComponents(m)
+	for c in comp:
+		name_space = "{"
+		params = getParameters(c)
+		first = True
+		for p in params:
+			if(first!=True):
+				name_space+=", "
+			name_space+="'" + p + "' : " + params.get(p)
+			first=False
+		name_space+= "}"
+		ct = m.component_types[c.type]
+		dyn = getDynamics(ct)
+		svs = getStatevariables(dyn)
+		tds = getTimederivatives(dyn)
+		eqs = "Equations('''\n"
+		if(tds): 
+			for t in tds:
+				eqs+="    d" + t.variable + "/dt = " + t.value + " : " + "\n"
+
+		rgs = getRegimes(dyn)
+		for r in rgs:
+			rtds = getTimederivatives(r)
+			if(rtds):
+				for rt in rtds:
+					eqs+="    d" + rt.variable + "/dt = " + rt.value + "\n"
+		dvs = getDerivedvaribales(dyn)
+		for d in dvs:
+			if(d.value):
+				eqs+= "    " + d.name + " = "
+				eqs+=d.value + "\n"
+		eqs+="''')"
+		size = 1
+		G = "NeuronGroup( 1" + ", model = " + eqs + ", namespace = " + name_space + ")\n"
+		print G
 
 
+
+tobrian('LEMS_NML2_Ex0_IaF.xml')
