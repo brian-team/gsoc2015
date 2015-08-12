@@ -1,5 +1,7 @@
 import lems.api as lems
 from brian2 import *
+from brian2.equations.equations import SingleEquation
+from brian2.equations.codestrings import Expression
 from lems.base.base import LEMSBase
 from lems.base.util import merge_maps, merge_lists
 from lems.base.map import Map
@@ -63,17 +65,17 @@ class LEMSBrianComponentType(ComponentType):
 
 	def __init__(self, name):
 		ComponentType.__init__(self, name)
+		self.uf = None
 
-	def get_neurongroup(self):
+	def get_neurongroup(self, size):
 		""" Creates a NeuronGroup of the component with id component_name
 		@type: brian2.groups.neurongroup.NeuronGroup """
 		model = self.get_equations()
-		threshold = self.get_threshold()
-		reset = self.get_reset()
-		refractory = self.get_refractory()
-		# name_space = self.get_namespace(comp)
-		N = 1 # replace later by get_size which will get the population
-		neuron_group = NeuronGroup(N, model, threshold)
+		_threshold = self.get_threshold()
+		_reset = self.get_reset()
+		_refractory = self.get_refractory()
+		N = size 
+		neuron_group = NeuronGroup(N, model, threshold = _threshold, reset = _reset, refractory = _refractory)
 		return neuron_group
 
 	def get_equations(self):
@@ -81,48 +83,71 @@ class LEMSBrianComponentType(ComponentType):
 		@type: brian2.equations.equations.Equations """
 		dyn = self.dynamics
 		tds = dyn.time_derivatives
-		# eqs = "'''\n"
-		eqs=""
+		eqs = []
+		_flags=[]
 		if(tds):
 			for t in tds:
-				eqs+=self.timederivative_to_string(t)
+				ex = Expression(t.value)
+				self.get_refractory()
+				for i in self.uf:
+					if(self.uf==t):
+						_flags=['unless refractory']
+				s = SingleEquation('differential equation', t.variable, self.timederivative_dimension(t), 'float', ex, flags=_flags)
+				eqs.append(s)
+
 		
 		rgs = dyn.regimes
 		for r in rgs:
 			rtds = r.time_derivatives
 			if(rtds):
 				for rtd in rtds:
-					eqs+=self.timederivative_to_string(rtd)
+					ex = Expression(rtd.value)
+					self.get_refractory()
+					for i in self.uf :
+						if(i==rtd):
+							_flags=['unless refractory']
+					s = SingleEquation('differential equation', rtd.variable, self.timederivative_dimension(rtd), 'float', ex, flags=_flags)
+					eqs.append(s)
 		dvs = dyn.derived_variables
 		for d in dvs:
 			if(d.value):
-				eqs+=d.name + " = " + d.value + " : " + self.getBrianSIUnits(d.dimension) + "\n"
-		equations = Equations(eqs)
-		return equations
+				ex = Expression(d.value)
+				s = SingleEquation('subexpression', d.name, self.getBrianSIUnits(d.dimension), 'float', ex)
+				eqs.append(s)
+		return Equations(eqs)
 
 
-	def timederivative_to_string(self, TimeDerivative):
+	def timederivative_dimension(self, TimeDerivative):
 		""" Converts the TimeDerivative object into a string and return it
 		@type: str """
-		td_eqn = "d" + TimeDerivative.variable + "/dt = " + TimeDerivative.value
 		svs = self.dynamics.state_variables
 		d = None
 		for s in svs:
 			if(TimeDerivative.variable==s.name):
 				d = s.dimension
-				td_eqn+=" : " + self.getBrianSIUnits(d) + "\n"
-		return td_eqn
+				td_dim=self.getBrianSIUnits(d)
+		return td_dim
 
 	def getBrianSIUnits(self, dimension):
-		if(dimension=="voltage"): return "volt";
-		if(dimension=="conductance"): return "siemens";
-		if(dimension=="time"): return "second";
-		if(dimension=="per_time"): return "1/second";
-		if(dimension=="capacitance"): return "farad";
-		if(dimension=="current"): return "amp";
-		if(dimension=="current"): return "amp";
-		if(dimension=="volume"): return "meter3";
-		if(dimension=="concentration"): return "mmole";
+		if(dimension=="voltage"): return volt;
+		if(dimension=="conductance"): return siemens;
+		if(dimension=="time"): return second;
+		if(dimension=="per_time"): return 1/second;
+		if(dimension=="capacitance"): return farad;
+		if(dimension=="current"): return amp;
+		if(dimension=="current"): return amp;
+		if(dimension=="volume"): return meter3;
+		if(dimension=="concentration"): return mmole;
+
+	def getUnitSymbol(self, dimension):
+		if(dimension=="voltage"): return "V";
+		if(dimension=="conductance"): return "S";
+		if(dimension=="time"): return "s";
+		if(dimension=="per_time"): return "1/s";
+		if(dimension=="capacitance"): return "F";
+		if(dimension=="current"): return "A";
+		if(dimension=="volume"): return "m";
+		if(dimension=="concentration"): return "mol";
 
 	def replace_operators(self, line):
 		line = line.replace(".gt." , ">")
@@ -149,7 +174,7 @@ class LEMSBrianComponentType(ComponentType):
 		for oc in roc:
 			if(type(oc) is lems.OnCondition):
 				threshcond = self.replace_operators(oc.test)
-			else: threshcond="None"
+			else: threshcond=None
 		return threshcond
 
 
@@ -192,25 +217,26 @@ class LEMSBrianComponentType(ComponentType):
 		@type: str"""
 		#OnCondition in refractory regime
 		rgs = self.dynamics.regimes
-		refract = ""
-		for r in rgs:
-			if(r.initial==True): main_regime = r
-			elif(r.initial==False): refractory_regime = r
-		roc = refractory_regime.event_handlers
-		for oc in roc:
-			if(type(oc) is lems.OnCondition):
-				refract = "not(" + self.replace_operators(oc.test) + ")"
-			else: refract = "None"
+		if len(rgs)>2 :
+			raise NotImplementedError("More than 2 regimes are not supported")
+		else :
+			refract = ""
+			for r in rgs:
+				if(r.initial==True): main_regime = r
+				elif(r.initial==False): refractory_regime = r
+			if(refractory_regime.time_derivatives):
+				for i in refractory_regime.time_derivatives:
+					if not (i.variable in main_regime.time_derivatives):
+						raise NotImplementedError
+			else:
+				self.uf=main_regime.time_derivatives
+
+			roc = refractory_regime.event_handlers
+			for oc in roc:
+				if(type(oc) is lems.OnCondition):
+					refract = "not(" + self.replace_operators(oc.test) + ")"
+					return refract
+				else: refract = None
 		return refract
 
-	def get_namespace(self, Component):
-		""" returns the parameters of the Component as a dictionary """
-
-model = LEMSBrian('LEMS_NML2_Ex0_IaF.xml')
-# print model.component_list
-a = model.get_component_type('iafRef')
-print a.get_equations()
-print a.get_threshold()
-print a.get_reset()
-print a.get_refractory()
-print a.get_neurongroup()
+	
