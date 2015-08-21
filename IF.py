@@ -1,4 +1,6 @@
 from brian2 import *
+from exporter import *
+import sys
 
 # n = 1000
 duration = 1*second
@@ -14,9 +16,12 @@ group = NeuronGroup(n, eqs, threshold='v > 10*mV', reset='v = 0*mV',
 group.v = 0*mV
 group.v0 = '20*mV * i / (n-1)'
 
+net = {}
+export_to_lems(net, str(sys.argv[0].split(".")[0]))
+
 monitor = SpikeMonitor(group)
-net = Network(collect())
-net.run(duration)
+# net = Network(collect())
+run(duration)
 plot(group.v0/mV, monitor.count / duration)
 xlabel('v0 (mV)')
 ylabel('Firing rate (sp/s)')

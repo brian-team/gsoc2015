@@ -1,10 +1,12 @@
 <?xml version="1.0" ?>
 <Lems xmlns="http://www.neuroml.org/lems/0.7.3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.neuroml.org/lems/0.7.3 https://raw.github.com/LEMS/LEMS/development/Schemas/LEMS/LEMS_v0.7.3.xsd">
-  <ComponentType name="IF">
-    <Parameter dimension="s" name="duration"/>
-    <Parameter dimension="ms" name="tau"/>
-    <Parameter dimension="1" name="n"/>
+  <ComponentType name="neurongroup">
+    <Parameter dimension="time" name="duration"/>
+    <Parameter dimension="time" name="tau"/>
+    <Parameter dimension="none" name="n"/>
     <Dynamics>
+      <StateVariable dimension="voltage" name="v"/>
+      <DerivedVariable dimension="voltage" name="v0" value="None"/>
       <Regime name="refractory">
         <OnCondition test="t .gt. 5. ms">
           <Transition regime="integrating"/>
@@ -15,9 +17,10 @@
       </Regime>
       <Regime initial="true" name="integrating">
         <TimeDerivative value="(v0 - v) / tau " variable="v"/>
-        <OnCondition test="v .gt. 10*mV">
-          <Transition regime="refractory"/>
+        <OnCondition test="v .gt. 10mV">
           <EventOut port="spike"/>
+          <StateAssignment value=" 0*mV" variable="v "/>
+          <Transition regime="refractory"/>
         </OnCondition>
       </Regime>
     </Dynamics>
