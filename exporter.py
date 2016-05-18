@@ -1,8 +1,7 @@
 from brian2 import *
 from brian2.groups.neurongroup import NeuronGroup
 from brian2.core.network import *
-import lems.api as lems
-from lems.model.component import Constant,ComponentType,Component,FatComponent,Parameter
+from lems.model.component import Parameter
 from lems.model.dynamics import *
 from lems.model.model import *
 import re
@@ -61,12 +60,13 @@ def export_to_lems(network, _output):
                     sv = StateVariable(l[0].strip(),dimension(dim[1]))
                     dyn.add_state_variable(sv)
 
-            for eq in o.user_equations._equations:
-                if(o.user_equations._equations[eq].type=='differential equation'):
-                    td = TimeDerivative(str(o.user_equations._equations[eq].varname), replace_expr(str(o.user_equations._equations[eq].expr)))
+            for eq in o.equations._equations:
+                if(o.equations._equations[eq].type=='differential equation'):
+                    print o.equations._equations[eq].expr
+                    td = TimeDerivative(str(o.equations._equations[eq].varname), replace_expr(str(o.equations._equations[eq].expr)))
                     for svs in dyn.state_variables:
-                        if(svs.name!=str(o.user_equations._equations[eq].varname)):
-                            sv = StateVariable(str(o.user_equations._equations[eq].varname), dimension(str(o.user_equations._equations[eq].unit)))
+                        if(svs.name!=str(o.equations._equations[eq].varname)):
+                            sv = StateVariable(str(o.equations._equations[eq].varname), dimension(str(o.equations._equations[eq].unit)))
                             dyn.add_state_variable(sv)
 
                     if(o._refractory):
@@ -78,10 +78,10 @@ def export_to_lems(network, _output):
                         dyn.add_time_derivative(td)
                         dyn.add_event_handler(oc)
 
-                if(o.user_equations._equations[eq].type=='subexpression' or o.user_equations._equations[eq].type=='parameter'):
-                    dv = DerivedVariable(str(o.user_equations._equations[eq].varname))
-                    dv.value = str(o.user_equations._equations[eq].expr)
-                    dv.dimension = dimension(str(o.user_equations._equations[eq].unit))
+                if(o.equations._equations[eq].type=='subexpression' or o.equations._equations[eq].type=='parameter'):
+                    dv = DerivedVariable(str(o.equations._equations[eq].varname))
+                    dv.value = str(o.equations._equations[eq].expr)
+                    dv.dimension = dimension(str(o.equations._equations[eq].unit))
                     dyn.add_derived_variable(dv)
 
 
