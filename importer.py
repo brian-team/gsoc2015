@@ -1,7 +1,12 @@
+import os
 import lems.api as lems
 
 m = lems.Model()
-m.add_include_directory('/home/snigdha/neuroml_dev/NeuroML2/NeuroML2CoreTypes')
+INCLUDE_DIRECTORY = ''
+if not os.path.isdir(INCLUDE_DIRECTORY):
+    raise ImportError('Set INCLUDE_DIRECTORY to the NeuroML2/NeuroML2CoreTypes directory')
+
+m.add_include_directory(INCLUDE_DIRECTORY)
 
 def getComponents(Model):
     return Model.components
